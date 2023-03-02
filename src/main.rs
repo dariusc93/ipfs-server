@@ -3,7 +3,7 @@ use std::error::Error;
 use clap::Parser;
 use rust_ipfs::{
     p2p::{IdentifyConfiguration, PeerInfo},
-    Ipfs, TestTypes, UninitializedIpfs,
+    UninitializedIpfs,
 };
 use tokio::sync::Notify;
 
@@ -14,7 +14,7 @@ struct Options {}
 #[tokio::main]
 #[allow(unreachable_code)]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let ipfs: Ipfs<TestTypes> = UninitializedIpfs::new()
+    let ipfs = UninitializedIpfs::new()
         .enable_mdns()
         .enable_relay(true)
         .enable_relay_server(None)
@@ -35,7 +35,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         async move {
             loop {
                 ipfs.bootstrap().await?;
-                tokio::time::sleep(std::time::Duration::from_secs(5*60)).await;
+                tokio::time::sleep(std::time::Duration::from_secs(5 * 60)).await;
             }
             Ok::<_, Box<dyn Error + Send>>(())
         }
