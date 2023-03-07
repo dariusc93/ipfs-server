@@ -37,7 +37,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     if let Some(path) = opt.config {
         let config = IpfsConfig::load(path)?;
-        keypair = Some(config.identity.keypair()?);
+        keypair = config.identity.keypair().ok()
     }
 
     if keypair.is_none() {
@@ -45,7 +45,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let keypair_data = zeroize::Zeroizing::new(tokio::fs::read_to_string(path).await?);
             let engine = GeneralPurpose::new(&STANDARD, PAD);
             let bytes = zeroize::Zeroizing::new(engine.decode(keypair_data.as_bytes())?);
-            keypair = Some(Keypair::from_protobuf_encoding(&bytes)?);
+            keypair = Keypair::from_protobuf_encoding(&bytes).ok();
         }
     }
 
