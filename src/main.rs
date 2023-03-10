@@ -32,6 +32,9 @@ struct Options {
 
     #[clap(short, long)]
     relays: Vec<Multiaddr>,
+
+    #[clap(short, long)]
+    disable_bootstrap: bool,
 }
 
 #[tokio::main]
@@ -83,7 +86,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             cache: 200,
             ..Default::default()
         });
-    
+
     if !opt.listen_address.is_empty() {
         for addr in opt.listen_address {
             uninitialized = uninitialized.add_listening_addr(addr);
@@ -117,17 +120,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    ipfs.default_bootstrap().await?;
-    tokio::spawn({
-        let ipfs = ipfs.clone();
-        async move {
-            loop {
-                ipfs.bootstrap().await?;
-                tokio::time::sleep(std::time::Duration::from_secs(5 * 60)).await;
+    if !opt.disable_bootstrap {
+        ipfs.default_bootstrap().await?;
+        tokio::spawn({
+            let ipfs = ipfs.clone();
+            async move {
+                loop {
+                    ipfs.bootstrap().await?;
+                    tokio::time::sleep(std::time::Duration::from_secs(5 * 60)).await;
+                }
+                Ok::<_, Box<dyn Error + Send>>(())
             }
-            Ok::<_, Box<dyn Error + Send>>(())
-        }
-    });
+        });
+    }
 
     // Used to give time after bootstrapping to populate the addresses
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
