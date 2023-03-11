@@ -8,7 +8,7 @@ use base64::{
 };
 use clap::Parser;
 use rust_ipfs::{
-    p2p::{IdentifyConfiguration, PeerInfo, SwarmConfig, TransportConfig},
+    p2p::{IdentifyConfiguration, KadConfig, KadInserts, PeerInfo, SwarmConfig, TransportConfig},
     IpfsOptions, Keypair, Multiaddr, Protocol, UninitializedIpfs,
 };
 use tokio::sync::Notify;
@@ -18,23 +18,37 @@ use crate::config::IpfsConfig;
 #[derive(Debug, Parser)]
 #[clap(name = "ipfs-server")]
 struct Options {
+    /// Setting path to use for persistence storage
     #[clap(short, long)]
     path: Option<PathBuf>,
 
+    /// Path to protobuf keypair
     #[clap(short, long)]
     keypair: Option<PathBuf>,
 
+    /// Path to IPFS configuration to use keypair
     #[clap(short, long)]
     config: Option<PathBuf>,
 
+    /// List of listening addresses in Multiaddr format (eg /ip4/0.0.0.0/tcp/0)
     #[clap(short, long)]
     listen_address: Vec<Multiaddr>,
 
+    /// List of relays to use. Note: This will disable the use of the relay server
     #[clap(short, long)]
     relays: Vec<Multiaddr>,
 
+    /// Disable bootstrapping. Note: Disabling bootstrapping will not announce your node to DHT.
     #[clap(short, long)]
     disable_bootstrap: bool,
+
+    /// Use default ipfs bootstrapping node.
+    #[clap(long)]
+    default_bootstrap: bool,
+
+    /// List of bootstrap nodes in Multiaddr format (eg /dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN)
+    #[clap(short, long)]
+    bootstraps: Vec<Multiaddr>,
 }
 
 #[tokio::main]
@@ -68,7 +82,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .enable_mdns()
         .enable_relay(true)
         .enable_upnp()
-        .disable_delay()
+        .set_kad_configuration(
+            KadConfig {
+                insert_method: KadInserts::Manual,
+                ..Default::default()
+            },
+            None,
+        )
         .set_swarm_configuration(SwarmConfig {
             notify_handler_buffer_size: 32.try_into()?,
             connection_event_buffer_size: 1024.try_into()?,
@@ -86,6 +106,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
             cache: 200,
             ..Default::default()
         });
+
+    if !opt.bootstraps.is_empty() {
+        for addr in opt.bootstraps {
+            uninitialized = uninitialized.add_bootstrap(addr);
+        }
+    }
 
     if !opt.listen_address.is_empty() {
         for addr in opt.listen_address {
@@ -105,11 +131,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     if !opt.relays.is_empty() {
         for relay in opt.relays {
-            if let Err(e) = ipfs.dial(relay.clone()).await {
+            if let Err(e) = ipfs.connect(relay.clone()).await {
                 println!("Error dialing relay: {e}");
                 continue;
             }
-            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
             if let Err(e) = ipfs
                 .add_listening_address(relay.with(Protocol::P2pCircuit))
                 .await
@@ -121,17 +147,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     if !opt.disable_bootstrap {
-        ipfs.default_bootstrap().await?;
-        tokio::spawn({
-            let ipfs = ipfs.clone();
-            async move {
-                loop {
-                    ipfs.bootstrap().await?;
-                    tokio::time::sleep(std::time::Duration::from_secs(5 * 60)).await;
+        if opt.default_bootstrap {
+            ipfs.default_bootstrap().await?;
+        }
+        if !ipfs.get_bootstraps().await?.is_empty() {
+            tokio::spawn({
+                let ipfs = ipfs.clone();
+                async move {
+                    loop {
+                        ipfs.bootstrap().await?;
+                        tokio::time::sleep(std::time::Duration::from_secs(5 * 60)).await;
+                    }
+                    Ok::<_, Box<dyn Error + Send>>(())
                 }
-                Ok::<_, Box<dyn Error + Send>>(())
-            }
-        });
+            });
+        }
     }
 
     // Used to give time after bootstrapping to populate the addresses
