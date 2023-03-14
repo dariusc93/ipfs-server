@@ -1,11 +1,11 @@
 [package]
 name = "ipfs-server"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 description = """
 Simple ipfs server built on rust-ipfs
 """
-rust-version = "1.60"
+rust-version = "1.67"
 license = "Apache-2.0 OR MIT"
 repository = "https://github.com/dariusc93/ipfs-server"
 authors = ["Darius Clark"]
