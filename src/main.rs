@@ -1,6 +1,9 @@
+mod arguments;
 mod config;
+
 use std::{error::Error, path::PathBuf};
 
+use arguments::IpfsCommand;
 use base64::{
     alphabet::STANDARD,
     engine::{general_purpose::PAD, GeneralPurpose},
@@ -9,7 +12,7 @@ use base64::{
 use clap::Parser;
 use rust_ipfs::{
     p2p::{IdentifyConfiguration, KadConfig, KadInserts, PeerInfo, SwarmConfig, TransportConfig},
-    IpfsOptions, Keypair, Multiaddr, Protocol, UninitializedIpfs,
+    FDLimit, IpfsOptions, Keypair, Multiaddr, Protocol, UninitializedIpfs,
 };
 use tokio::sync::Notify;
 
@@ -43,12 +46,19 @@ struct Options {
     disable_bootstrap: bool,
 
     /// Use default ipfs bootstrapping node.
-    #[clap(long)]
+    #[clap(long, default_value_t = true)]
     default_bootstrap: bool,
+
+    /// Announces node to DHT
+    #[clap(long)]
+    bootstrap: bool,
 
     /// List of bootstrap nodes in Multiaddr format (eg /dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN)
     #[clap(short, long)]
     bootstraps: Vec<Multiaddr>,
+
+    #[command(subcommand)]
+    command: Option<IpfsCommand>,
 }
 
 #[tokio::main]
@@ -82,6 +92,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .enable_mdns()
         .enable_relay(true)
         .enable_upnp()
+        .fd_limit(FDLimit::Max)
         .set_kad_configuration(
             KadConfig {
                 insert_method: KadInserts::Manual,
@@ -150,7 +161,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         if opt.default_bootstrap {
             ipfs.default_bootstrap().await?;
         }
-        if !ipfs.get_bootstraps().await?.is_empty() {
+        if opt.bootstrap && !ipfs.get_bootstraps().await?.is_empty() {
             tokio::spawn({
                 let ipfs = ipfs.clone();
                 async move {
@@ -167,20 +178,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Used to give time after bootstrapping to populate the addresses
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
-    let PeerInfo {
-        public_key: key,
-        listen_addrs: addresses,
-        ..
-    } = ipfs.identity(None).await?;
+    match opt.command {
+        Some(command) => arguments::arguments(&ipfs, command).await?,
+        None => {
+            let PeerInfo {
+                public_key: key,
+                listen_addrs: addresses,
+                ..
+            } = ipfs.identity(None).await?;
 
-    println!("PeerID: {}", key.to_peer_id());
+            println!("PeerID: {}", key.to_peer_id());
 
-    for address in addresses {
-        println!("Listening on: {address}");
+            for address in addresses {
+                println!("Listening on: {address}");
+            }
+
+            // Used to wait until the process is terminated instead of creating a loop
+            Notify::new().notified().await;
+        }
     }
-
-    // Used to wait until the process is terminated instead of creating a loop
-    Notify::new().notified().await;
 
     ipfs.exit_daemon().await;
     Ok(())
