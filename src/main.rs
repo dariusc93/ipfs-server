@@ -82,13 +82,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let mut options = IpfsOptions::default();
-
-    if let Some(keypair) = keypair {
-        options.keypair = keypair;
-    }
-
-    let mut uninitialized = UninitializedIpfs::with_opt(options)
+    let mut uninitialized = UninitializedIpfs::new()
         .enable_mdns()
         .enable_relay(true)
         .enable_upnp()
@@ -117,6 +111,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
             cache: 200,
             ..Default::default()
         });
+
+    if let Some(keypair) = keypair {
+        uninitialized = uninitialized.set_keypair(keypair);
+    }
 
     if !opt.bootstraps.is_empty() {
         for addr in opt.bootstraps {
