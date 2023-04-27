@@ -5,7 +5,7 @@ edition = "2021"
 description = """
 Simple ipfs server built on rust-ipfs
 """
-rust-version = "1.67"
+rust-version = "1.68"
 license = "Apache-2.0 OR MIT"
 repository = "https://github.com/dariusc93/ipfs-server"
 authors = ["Darius Clark"]
@@ -17,8 +17,9 @@ readme = "README.md"
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-rust-ipfs = "0.3.8"
+rust-ipfs = "0.3.15"
 tokio = { version = "1", features = ["full"] }
+futures = "0.3"
 clap = { version = "4.1", features = ["derive"] }
 zeroize = "1"
 base64 = "0.21"
