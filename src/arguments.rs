@@ -7,9 +7,11 @@ use base64::{
 };
 use clap::{Args, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
-use libipld::Cid;
+use libipld::{Cid, prelude::Codec, Ipld, serde::to_ipld};
 use rust_ipfs::{
-    libp2p::futures::StreamExt, unixfs::UnixfsStatus, Ipfs, IpfsPath, PeerId, PinMode,
+    libp2p::futures::StreamExt,
+    unixfs::{NodeItem, UnixfsStatus},
+    Ipfs, IpfsPath, PeerId, PinMode,
 };
 use tokio::io::AsyncWriteExt;
 
@@ -20,6 +22,9 @@ pub enum IpfsCommand {
 
     /// Add a file to IPFS
     Add { path: PathBuf },
+
+    /// List directory contents for unixfs objects
+    Ls { path: IpfsPath },
 
     /// Pin objects to local storage
     Pin(PinArg),
@@ -32,6 +37,9 @@ pub enum IpfsCommand {
         path: IpfsPath,
         local: Option<PathBuf>,
     },
+
+    /// Interact with IPLD DAG objects
+    Dag(DagArg),
 
     /// Query the DHT for values or peers
     Dht(DhtArg),
@@ -50,6 +58,12 @@ pub struct RepoArg {
 pub struct DhtArg {
     #[command(subcommand)]
     command: DhtCommand,
+}
+
+#[derive(Debug, Args)]
+pub struct DagArg {
+    #[command(subcommand)]
+    command: DagCommand,
 }
 
 #[derive(Debug, Args)]
@@ -80,12 +94,21 @@ pub enum PinCommand {
 }
 
 #[derive(Debug, Subcommand)]
+pub enum DagCommand {
+    /// Get a DAG node from IPFS
+    Get { path: IpfsPath },
+
+    /// Add a DAG node to IPFS
+    Put { object: String },
+}
+
+#[derive(Debug, Subcommand)]
 pub enum DhtCommand {
     /// Find the multiaddresses associated with a Peer ID.
     Findpeer { peer_id: PeerId },
 
     /// Find peers that can provide a specific value, given a key.
-    Findprovs { key: Cid }
+    Findprovs { key: Cid },
 }
 
 pub async fn arguments(ipfs: &Ipfs, command: IpfsCommand) -> Result<(), Box<dyn Error>> {
@@ -124,6 +147,20 @@ pub async fn arguments(ipfs: &Ipfs, command: IpfsCommand) -> Result<(), Box<dyn 
                     }
                     UnixfsStatus::FailedStatus { error, .. } => {
                         pb.finish_with_message(format!("Error adding file to ipfs: {error:?}"));
+                    }
+                }
+            }
+        }
+        IpfsCommand::Ls { path } => {
+            let mut list = ipfs.ls_unixfs(path).await?;
+
+            while let Some(item) = list.next().await {
+                match item {
+                    NodeItem::Directory { .. } | NodeItem::RootDirectory { .. } => {}
+                    NodeItem::File { cid, file, size } => println!("{} {} {}", cid, size, file),
+                    NodeItem::Error { error } => {
+                        println!("Error listening item: {error}");
+                        break;
                     }
                 }
             }
@@ -186,6 +223,21 @@ pub async fn arguments(ipfs: &Ipfs, command: IpfsCommand) -> Result<(), Box<dyn 
                 }
             }
         }
+
+        IpfsCommand::Dag(DagArg { command }) => match command {
+            DagCommand::Get { path } => {
+                let object = ipfs.get_dag(path).await?;
+                let value = libipld::json::DagJsonCodec.encode(&object)?;
+                println!("{}", String::from_utf8_lossy(&value));
+            }
+            DagCommand::Put { object } => {
+                // let bytes = object.as_bytes();
+                let object: Ipld = to_ipld(object)?;
+                let cid = ipfs.put_dag(object).await?;
+                println!("{}", cid);
+            }
+        },
+
         IpfsCommand::Dht(DhtArg { command }) => match command {
             DhtCommand::Findpeer { peer_id } => {
                 let addresses = ipfs.find_peer(peer_id).await?;

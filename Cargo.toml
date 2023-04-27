@@ -23,5 +23,5 @@ futures = "0.3"
 clap = { version = "4.1", features = ["derive"] }
 zeroize = "1"
 base64 = "0.21"
-libipld = { version = "0.15" }
+libipld = { version = "0.15", features = ["serde-codec"] }
 indicatif = "0.17"
