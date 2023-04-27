@@ -75,10 +75,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     if keypair.is_none() {
         if let Some(path) = opt.keypair {
-            let keypair_data = zeroize::Zeroizing::new(tokio::fs::read_to_string(path).await?);
-            let engine = GeneralPurpose::new(&STANDARD, PAD);
-            let bytes = zeroize::Zeroizing::new(engine.decode(keypair_data.as_bytes())?);
-            keypair = Keypair::from_protobuf_encoding(&bytes).ok();
+            if path.is_file() {
+                let keypair_data = zeroize::Zeroizing::new(tokio::fs::read_to_string(path).await?);
+                let engine = GeneralPurpose::new(&STANDARD, PAD);
+                let bytes = zeroize::Zeroizing::new(engine.decode(keypair_data.as_bytes())?);
+                keypair = Keypair::from_protobuf_encoding(&bytes).ok();
+            } else {
+                let kp = Keypair::generate_ed25519();
+                let engine = GeneralPurpose::new(&STANDARD, PAD);
+                let data = zeroize::Zeroizing::new(engine.encode(kp.to_protobuf_encoding()?));
+                tokio::fs::write(path, &data).await?;
+                keypair = Some(kp);
+            }
         }
     }
 
@@ -87,28 +95,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .enable_relay(true)
         .enable_upnp()
         .fd_limit(FDLimit::Max)
-        .set_kad_configuration(
-            KadConfig {
-                insert_method: KadInserts::Manual,
-                ..Default::default()
-            },
-            None,
-        )
+        .disable_delay()
+        .set_kad_configuration(KadConfig::default(), None)
         .set_swarm_configuration(SwarmConfig {
             notify_handler_buffer_size: 32.try_into()?,
             connection_event_buffer_size: 1024.try_into()?,
             ..Default::default()
         })
         .set_transport_configuration(TransportConfig {
-            yamux_max_buffer_size: 16 * 1024 * 1024,
-            yamux_receive_window_size: 16 * 1024 * 1024,
-            mplex_max_buffer_size: usize::MAX / 2,
+            enable_quic: false,
             ..Default::default()
         })
         .set_identify_configuration(IdentifyConfiguration {
             agent_version: "ipfs-server/0.1.0".into(),
             push_update: true,
-            cache: 200,
+            cache: 100,
             ..Default::default()
         });
 
@@ -164,7 +165,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 let ipfs = ipfs.clone();
                 async move {
                     loop {
-                        ipfs.bootstrap().await?;
+                        ipfs.bootstrap().await?.await.expect("Task errored")?;
                         tokio::time::sleep(std::time::Duration::from_secs(5 * 60)).await;
                     }
                     Ok::<_, Box<dyn Error + Send>>(())
