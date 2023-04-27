@@ -127,9 +127,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     if !opt.listen_address.is_empty() {
-        for addr in opt.listen_address {
-            uninitialized = uninitialized.add_listening_addr(addr);
-        }
+        uninitialized = uninitialized.add_listening_addrs(opt.listen_address);
     }
 
     if opt.relays.is_empty() {
