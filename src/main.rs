@@ -11,8 +11,8 @@ use base64::{
 };
 use clap::Parser;
 use rust_ipfs::{
-    p2p::{IdentifyConfiguration, KadConfig, KadInserts, PeerInfo, SwarmConfig, TransportConfig},
-    FDLimit, IpfsOptions, Keypair, Multiaddr, Protocol, UninitializedIpfs,
+    p2p::{IdentifyConfiguration, KadConfig, PeerInfo, SwarmConfig, TransportConfig},
+    FDLimit, Keypair, Multiaddr, Protocol, UninitializedIpfs,
 };
 use tokio::sync::Notify;
 
@@ -48,6 +48,9 @@ struct Options {
     /// Use default ipfs bootstrapping node.
     #[clap(long, default_value_t = true)]
     default_bootstrap: bool,
+
+    #[clap(long, default_value_t = true)]
+    disable_quic: bool,
 
     /// Announces node to DHT
     #[clap(long)]
