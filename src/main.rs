@@ -11,7 +11,7 @@ use base64::{
 };
 use clap::Parser;
 use rust_ipfs::{
-    p2p::{IdentifyConfiguration, KadConfig, PeerInfo, SwarmConfig, TransportConfig},
+    p2p::{IdentifyConfiguration, KadConfig, PeerInfo, SwarmConfig, TransportConfig, UpgradeVersion, UpdateMode},
     FDLimit, Keypair, Multiaddr, Protocol, UninitializedIpfs,
 };
 use tokio::sync::Notify;
@@ -107,6 +107,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         })
         .set_transport_configuration(TransportConfig {
             enable_quic: false,
+            version: Some(UpgradeVersion::Lazy),
+            yamux_update_mode: UpdateMode::Read,
             ..Default::default()
         })
         .set_identify_configuration(IdentifyConfiguration {

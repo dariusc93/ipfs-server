@@ -116,7 +116,7 @@ pub async fn arguments(ipfs: &Ipfs, command: IpfsCommand) -> Result<(), Box<dyn 
     match command {
         IpfsCommand::Id { peer_id } => {
             let info = ipfs.identity(peer_id).await?;
-            let public_key = engine.encode(info.public_key.to_protobuf_encoding());
+            let public_key = engine.encode(info.public_key.encode_protobuf());
             println!("PeerID: {}", info.peer_id);
             println!("Public Key: {public_key}");
             println!("Addresses:");
