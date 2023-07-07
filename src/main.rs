@@ -11,10 +11,12 @@ use base64::{
 };
 use clap::Parser;
 use rust_ipfs::{
-    p2p::{IdentifyConfiguration, KadConfig, PeerInfo, SwarmConfig, TransportConfig, UpgradeVersion, UpdateMode},
-    FDLimit, Keypair, Multiaddr, Protocol, UninitializedIpfs,
+    p2p::{
+        IdentifyConfiguration, KadConfig, PeerInfo, SwarmConfig, TransportConfig, UpdateMode,
+        UpgradeVersion,
+    },
+    FDLimit, Keypair, Multiaddr, Protocol, UninitializedIpfsNoop,
 };
-use tokio::sync::Notify;
 
 use crate::config::IpfsConfig;
 
@@ -93,13 +95,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let mut uninitialized = UninitializedIpfs::new()
+    let mut uninitialized = UninitializedIpfsNoop::new()
         .enable_mdns()
         .enable_relay(true)
         .enable_upnp()
         .fd_limit(FDLimit::Max)
         .disable_delay()
-        .set_kad_configuration(KadConfig::default(), None)
+        .set_kad_configuration(KadConfig::default(), Default::default())
         .set_swarm_configuration(SwarmConfig {
             notify_handler_buffer_size: 32.try_into()?,
             connection_event_buffer_size: 1024.try_into()?,
@@ -114,7 +116,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .set_identify_configuration(IdentifyConfiguration {
             agent_version: "ipfs-server/0.1.0".into(),
             push_update: true,
-            cache: 100,
             ..Default::default()
         });
 
@@ -195,8 +196,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 println!("Listening on: {address}");
             }
 
-            // Used to wait until the process is terminated instead of creating a loop
-            Notify::new().notified().await;
+            tokio::signal::ctrl_c().await?;
         }
     }
 

@@ -7,7 +7,7 @@ use base64::{
 };
 use clap::{Args, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
-use libipld::{Cid, prelude::Codec, Ipld, serde::to_ipld};
+use libipld::{prelude::Codec, serde::to_ipld, Cid, Ipld};
 use rust_ipfs::{
     libp2p::futures::StreamExt,
     unixfs::{NodeItem, UnixfsStatus},
