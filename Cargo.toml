@@ -17,7 +17,7 @@ readme = "README.md"
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-rust-ipfs = "=0.3.19"
+rust-ipfs = "0.10"
 tokio = { version = "1", features = ["full"] }
 futures = "0.3"
 clap = { version = "4.1", features = ["derive"] }

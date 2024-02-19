@@ -10,7 +10,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use libipld::{prelude::Codec, serde::to_ipld, Cid, Ipld};
 use rust_ipfs::{
     libp2p::futures::StreamExt,
-    unixfs::{NodeItem, UnixfsStatus},
+    unixfs::{Entry, UnixfsStatus},
     Ipfs, IpfsPath, PeerId, PinMode,
 };
 use tokio::io::AsyncWriteExt;
@@ -135,7 +135,7 @@ pub async fn arguments(ipfs: &Ipfs, command: IpfsCommand) -> Result<(), Box<dyn 
             let pb = ProgressBar::new(size);
             pb.set_style(ProgressStyle::with_template("{msg}\n {spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})")?.progress_chars("#>-"));
 
-            let mut status = ipfs.add_file_unixfs(path).await?;
+            let mut status = ipfs.add_unixfs(path);
 
             while let Some(status) = status.next().await {
                 match status {
@@ -152,13 +152,13 @@ pub async fn arguments(ipfs: &Ipfs, command: IpfsCommand) -> Result<(), Box<dyn 
             }
         }
         IpfsCommand::Ls { path } => {
-            let mut list = ipfs.ls_unixfs(path).await?;
+            let mut list = ipfs.ls_unixfs(path);
 
             while let Some(item) = list.next().await {
                 match item {
-                    NodeItem::Directory { .. } | NodeItem::RootDirectory { .. } => {}
-                    NodeItem::File { cid, file, size } => println!("{} {} {}", cid, size, file),
-                    NodeItem::Error { error } => {
+                    Entry::Directory { .. } | Entry::RootDirectory { .. } => {}
+                    Entry::File { cid, file, size } => println!("{} {} {}", cid, size, file),
+                    Entry::Error { error } => {
                         println!("Error listening item: {error}");
                         break;
                     }
@@ -166,7 +166,7 @@ pub async fn arguments(ipfs: &Ipfs, command: IpfsCommand) -> Result<(), Box<dyn 
             }
         }
         IpfsCommand::Cat { path } => {
-            let mut stream = ipfs.cat_unixfs(path, None).await?.boxed();
+            let mut stream = ipfs.cat_unixfs(path);
             let mut stdout = tokio::io::stdout();
 
             while let Some(result) = stream.next().await {
@@ -196,7 +196,7 @@ pub async fn arguments(ipfs: &Ipfs, command: IpfsCommand) -> Result<(), Box<dyn 
             let pb = ProgressBar::new(0);
             pb.set_style(ProgressStyle::with_template("{msg}\n {spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({bytes_per_sec}, {eta})")?.progress_chars("#>-"));
 
-            let mut status = ipfs.get_unixfs(path, file.clone()).await?;
+            let mut status = ipfs.get_unixfs(path, file.clone());
 
             let mut size_set = false;
 
@@ -262,7 +262,12 @@ pub async fn arguments(ipfs: &Ipfs, command: IpfsCommand) -> Result<(), Box<dyn 
         },
         IpfsCommand::Pin(PinArg { recursive, command }) => match command {
             PinCommand::Add { path } => {
-                ipfs.insert_pin(&path, recursive).await?;
+                let mut pinner = ipfs.insert_pin(&path);
+                if recursive {
+                    pinner = pinner.recursive();
+                }
+                pinner.await?;
+
                 print!("pinned {path} ");
                 if recursive {
                     println!("recursively");
@@ -290,7 +295,12 @@ pub async fn arguments(ipfs: &Ipfs, command: IpfsCommand) -> Result<(), Box<dyn 
                 }
             }
             PinCommand::Rm { path } => {
-                ipfs.remove_pin(&path, recursive).await?;
+                let mut pinner = ipfs.remove_pin(&path);
+                if recursive {
+                    pinner = pinner.recursive();
+                }
+                pinner.await?;
+
                 println!("unpinned {path}");
             }
         },
